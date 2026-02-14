@@ -1,744 +1,563 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Bot, Send, Code2, Brain, Zap, Settings, Terminal, Cpu, Database, AlertCircle, CheckCircle, 
-  Sparkles, FileCode, Bug, Lightbulb, Copy, Trash2, RefreshCw, Server, Activity, Shield, 
-  MessageSquare, Clock, BarChart3, Thermometer, HardDrive, Gauge, CpuIcon, User, Loader2, 
-  MemoryStick, Timer, Download, Package, FolderOpen, File, Folder, Trash, HardDriveDownload,
-  Plus, X, Check, Info, Warning, Optimized
+import {
+  Bot, Send, Brain, Zap, Settings, Cpu, Database, HardDrive,
+  Loader2, Download, CloudDownload, Sun, Moon, Sparkles, Layers,
+  Terminal, CheckCircle, XCircle, Clock, Star,
+  Play, Pause, RefreshCw, Shield, Activity,
+  Trash2, Package, Server, MemoryStick, PieChart, Archive,
+  Wifi, FileText, Container, Power, RotateCcw, Globe, Firewall
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  model?: string;
-  processingTime?: number;
-}
-
-interface SystemInfo {
-  cpu: { usage: number; temp: number; cores: number; model: string; loadAvg: string };
-  memory: { total: number; used: number; free: number; cached: number; usagePercent: number };
-  gpu: { name: string; memory: { total: number; used: number; free: number }; temp: number; power: number; utilization: number; fan: number } | null;
-  disk: { total: number; used: number; free: number; usagePercent: number };
-  uptime: string;
-  timestamp: number;
-}
-
-interface AIModel {
-  name: string;
-  size: number;
-  digest: string;
-  modified_at: string;
-  details?: { family: string; parameter_size: string; quantization_level: string };
-}
-
-interface StorageInfo {
-  project: { path: string; size: number };
-  ollama: { path: string; size: number };
-  disk: { total: number; used: number; free: number };
-}
-
-interface FileItem {
-  name: string;
-  path: string;
-  size: number;
-  type: 'file' | 'directory';
-  modified: string;
-  extension?: string;
-}
-
-const formatBytes = (bytes: number) => {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+const formatBytes = (b: number) => {
+  if (!b || b === 0) return '0 B';
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+  return (b / 1073741824).toFixed(2) + ' GB';
 };
 
-const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('bg-BG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const formatUptime = (ms: number) => {
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  return `${days}d ${hours}h`;
 };
 
 const POPULAR_MODELS = [
-  { name: 'phi3:mini', desc: 'Бърз, 3.8B параметъра', size: '~2.2GB' },
-  { name: 'phi3:medium', desc: 'Среден, 14B параметъра', size: '~8GB' },
-  { name: 'qwen2.5-coder:7b', desc: 'Web & Code specialist', size: '~4.7GB' },
-  { name: 'qwen2.5:14b', desc: 'Мощен general purpose', size: '~9GB' },
-  { name: 'deepseek-coder:6.7b', desc: 'Backend & Architecture', size: '~3.8GB' },
-  { name: 'deepseek-r1:7b', desc: 'Reasoning model', size: '~4.7GB' },
-  { name: 'llama3.2:3b', desc: 'Meta Llama 3.2', size: '~2GB' },
-  { name: 'mistral:7b', desc: 'Mistral 7B', size: '~4.1GB' },
-  { name: 'codellama:7b', desc: 'Code specialist', size: '~3.8GB' },
-  { name: 'gemma2:9b', desc: 'Google Gemma 2', size: '~5.5GB' },
+  { name: 'llama3.3:70b', desc: 'Llama 3.3 70B', size: '~40 GB', category: 'Llama' },
+  { name: 'llama3.2:3b', desc: 'Llama 3.2 3B', size: '~2 GB', category: 'Llama' },
+  { name: 'llama3.2:1b', desc: 'Llama 3.2 1B', size: '~1.3 GB', category: 'Llama' },
+  { name: 'deepseek-r1:14b', desc: 'DeepSeek R1 14B', size: '~9 GB', category: 'DeepSeek' },
+  { name: 'deepseek-r1:7b', desc: 'DeepSeek R1 7B', size: '~4.7 GB', category: 'DeepSeek' },
+  { name: 'deepseek-coder:6.7b', desc: 'DeepSeek Coder', size: '~3.8 GB', category: 'DeepSeek' },
+  { name: 'qwen3:14b', desc: 'Qwen 3 14B', size: '~9 GB', category: 'Qwen' },
+  { name: 'qwen2.5:7b', desc: 'Qwen 2.5 7B', size: '~4.7 GB', category: 'Qwen' },
+  { name: 'qwen2.5-coder:7b', desc: 'Qwen Coder', size: '~4.4 GB', category: 'Qwen' },
+  { name: 'mistral:7b', desc: 'Mistral 7B', size: '~4.1 GB', category: 'Mistral' },
+  { name: 'phi3:mini', desc: 'Phi-3 Mini', size: '~2.3 GB', category: 'Phi' },
+  { name: 'gemma2:9b', desc: 'Gemma 2 9B', size: '~5.4 GB', category: 'Gemma' },
+  { name: 'codellama:7b', desc: 'Code Llama', size: '~3.8 GB', category: 'Code' },
+  { name: 'llava:7b', desc: 'LLaVA Vision', size: '~4.7 GB', category: 'Vision' },
+  { name: 'nomic-embed-text', desc: 'Embeddings', size: '~274 MB', category: 'Utility' },
 ];
 
+interface Model { name: string; size: number; details?: { parameter_size?: string; family?: string; }; }
+interface Service { name: string; status: string; enabled: boolean; }
+interface Container { id: string; name: string; status: string; image: string; }
+interface NetworkIF { name: string; ip: string; mac: string; up: boolean; }
+interface Message { id: string; role: string; content: string; timestamp: string; models?: string[]; }
+
 export default function CrazyITApp() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState('console');
-  const [codeInput, setCodeInput] = useState('');
-  const [codeLanguage, setCodeLanguage] = useState('javascript');
-  const [codeOutput, setCodeOutput] = useState('');
-  const [codeDescription, setCodeDescription] = useState('');
-  const [modelName, setModelName] = useState('phi3:mini');
-  const [stats, setStats] = useState({ messages: 0, requests: 0, totalTime: 0 });
-  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  
-  // Models state
-  const [installedModels, setInstalledModels] = useState<AIModel[]>([]);
-  const [isPulling, setIsPulling] = useState(false);
-  const [pullModelName, setPullModelName] = useState('');
-  const [pullProgress, setPullProgress] = useState('');
-  
-  // Storage state
-  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [currentPath, setCurrentPath] = useState('');
+  const [isDark, setIsDark] = useState(true);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState('auto');
+  const [models, setModels] = useState<Model[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [sys, setSys] = useState({ cpu: { usage: 0, temp: 0 }, memory: { total: 0, used: 0, usagePercent: 0 }, uptime: 0, hostname: '' });
+  const [services, setServices] = useState<Service[]>([]);
+  const [containers, setContainers] = useState<Container[]>([]);
+  const [network, setNetwork] = useState<NetworkIF[]>([]);
+  const [storage, setStorage] = useState<any>(null);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [pullingModel, setPullingModel] = useState<string | null>(null);
+  const [modelSearch, setModelSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [cmdInput, setCmdInput] = useState('');
+  const [cmdResult, setCmdResult] = useState('');
+  const [cmdLoading, setCmdLoading] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Fetch system info
-  const fetchSystemInfo = useCallback(async () => {
-    try {
-      const res = await fetch('/api/system');
-      const data = await res.json();
-      setSystemInfo(data);
-    } catch (e) {}
-  }, []);
-
-  // Fetch installed models
   const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetch('/api/models?action=list');
-      const data = await res.json();
-      setInstalledModels(data.models || []);
-    } catch (e) {}
+    try { const r = await fetch('/api/ollama'); const d = await r.json(); setConnected(d.ollamaConnected); setModels(d.models || []); } catch {}
   }, []);
 
-  // Fetch storage info
-  const fetchStorageInfo = useCallback(async () => {
-    try {
-      const res = await fetch('/api/storage?action=info');
-      const data = await res.json();
-      setStorageInfo(data);
-    } catch (e) {}
+  const fetchSys = useCallback(async () => {
+    try { const r = await fetch('/api/system'); const d = await r.json(); if (d.systemInfo) setSys(d.systemInfo); } catch {}
   }, []);
 
-  // Fetch files
-  const fetchFiles = useCallback(async (path: string = '') => {
-    try {
-      const res = await fetch(`/api/storage?action=list&path=${encodeURIComponent(path)}`);
-      const data = await res.json();
-      setFiles(data.files || []);
-      setCurrentPath(data.currentPath || '');
-    } catch (e) {}
+  const fetchStorage = useCallback(async () => {
+    try { const r = await fetch('/api/ollama/storage'); const d = await r.json(); setStorage(d.storage); } catch {}
   }, []);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-  
+  const fetchServices = useCallback(async () => {
+    try { const r = await fetch('/api/system/services'); const d = await r.json(); setServices(d.services || []); } catch {}
+  }, []);
+
+  const fetchDocker = useCallback(async () => {
+    try { const r = await fetch('/api/system/docker'); const d = await r.json(); setContainers(d.containers || []); } catch {}
+  }, []);
+
+  const fetchNetwork = useCallback(async () => {
+    try { const r = await fetch('/api/system/network'); const d = await r.json(); setNetwork(d.interfaces || []); } catch {}
+  }, []);
+
+  const fetchLogs = useCallback(async (source: string = 'syslog') => {
+    try { const r = await fetch(`/api/system/logs?source=${source}&lines=50`); const d = await r.json(); setLogs(d.logs || []); } catch {}
+  }, []);
+
+  const execCommand = async (cmd: string) => {
+    if (!cmd.trim() || cmdLoading) return;
+    setCmdLoading(true);
+    try {
+      const r = await fetch('/api/system/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+      });
+      const d = await r.json();
+      setCmdResult(d.success ? d.stdout || 'Done' : `Error: ${d.error || d.stderr}`);
+    } catch (e: any) { setCmdResult(`Error: ${e.message}`); }
+    setCmdLoading(false);
+  };
+
+  const manageService = async (name: string, action: string) => {
+    try {
+      await fetch('/api/system/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, action })
+      });
+      fetchServices();
+    } catch {}
+  };
+
+  const pullModel = async (modelName: string) => {
+    if (!modelName.trim()) return;
+    setPullingModel(modelName);
+    try {
+      await fetch('/api/ollama', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pull', modelName })
+      });
+      fetchStorage(); fetchModels();
+    } catch {}
+    setPullingModel(null);
+  };
+
+  const deleteModel = async (modelName: string) => {
+    if (!confirm(`Delete ${modelName}?`)) return;
+    try {
+      await fetch(`/api/ollama?model=${encodeURIComponent(modelName)}`, { method: 'DELETE' });
+      fetchStorage(); fetchModels();
+    } catch {}
+  };
+
   useEffect(() => {
-    fetchSystemInfo();
-    fetchModels();
-    fetchStorageInfo();
-    const interval = setInterval(fetchSystemInfo, 3000);
-    return () => clearInterval(interval);
-  }, [fetchSystemInfo, fetchModels, fetchStorageInfo]);
+    fetchModels(); fetchSys(); fetchStorage(); fetchServices(); fetchDocker(); fetchNetwork();
+    const i = setInterval(() => { fetchSys(); }, 5000);
+    return () => clearInterval(i);
+  }, [fetchModels, fetchSys, fetchStorage, fetchServices, fetchDocker, fetchNetwork]);
 
-  useEffect(() => {
-    if (activeTab === 'storage') {
-      fetchFiles(currentPath);
-    }
-  }, [activeTab, currentPath, fetchFiles]);
+  useEffect(() => { ref.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || isProcessing) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputMessage.trim(),
-      timestamp: new Date().toISOString()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
-    setIsProcessing(true);
-
-    const startTime = Date.now();
-
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const msg: Message = { id: Date.now().toString(), role: 'user', content: input, timestamp: new Date().toISOString() };
+    setMessages(p => [...p, msg]);
+    setInput('');
+    setLoading(true);
     try {
-      const response = await fetch('/api/ai', {
+      const r = await fetch('/api/ai/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: inputMessage.trim(),
-          model: modelName,
-          history: messages.slice(-6).map(m => ({ role: m.role, content: m.content }))
-        })
+        body: JSON.stringify({ messages: [...messages, msg].map(m => ({ role: m.role, content: m.content })), mode })
       });
-
-      const data = await response.json();
-      const processingTime = Date.now() - startTime;
-
-      if (data.error) {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `❌ Грешка: ${data.error}`,
-          timestamp: new Date().toISOString()
-        }]);
-      } else {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: data.content,
-          timestamp: new Date().toISOString(),
-          model: data.model,
-          processingTime: data.processingTime || processingTime
-        }]);
-        setStats(s => ({ messages: s.messages + 1, requests: s.requests + 1, totalTime: s.totalTime + processingTime }));
-      }
-    } catch (error: any) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `❌ Грешка: ${error.message}`,
-        timestamp: new Date().toISOString()
-      }]);
-    }
-
-    setIsProcessing(false);
-    inputRef.current?.focus();
-  };
-
-  const handleCodeAction = async (action: string) => {
-    if ((!codeInput.trim() && !codeDescription.trim()) || isProcessing) return;
-
-    setIsProcessing(true);
-    setCodeOutput('');
-
-    const prompts: Record<string, string> = {
-      generate: `Генерирай ${codeLanguage} код за: ${codeDescription}`,
-      analyze: `Анализирай този ${codeLanguage} код:\n\`\`\`${codeLanguage}\n${codeInput}\n\`\`\``,
-      debug: `Намери и поправи грешките в този ${codeLanguage} код:\n\`\`\`${codeLanguage}\n${codeInput}\n\`\`\``,
-      explain: `Обясни този ${codeLanguage} код:\n\`\`\`${codeLanguage}\n${codeInput}\n\`\`\``
-    };
-
-    try {
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompts[action], model: modelName })
-      });
-      const data = await response.json();
-      setCodeOutput(data.content || data.error || 'Няма отговор');
-      setStats(s => ({ ...s, requests: s.requests + 1 }));
-    } catch (error: any) {
-      setCodeOutput(`Грешка: ${error.message}`);
-    }
-
-    setIsProcessing(false);
-  };
-
-  // Pull new model
-  const handlePullModel = async (modelName: string) => {
-    setIsPulling(true);
-    setPullModelName(modelName);
-    setPullProgress('Изтегляне...');
-    
-    try {
-      const res = await fetch('/api/models', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'pull', model: modelName })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setPullProgress('Инсталиран успешно!');
-        await fetchModels();
-      } else {
-        setPullProgress('Грешка при инсталация');
-      }
-    } catch (e) {
-      setPullProgress('Грешка при инсталация');
-    }
-    
-    setTimeout(() => {
-      setIsPulling(false);
-      setPullModelName('');
-      setPullProgress('');
-    }, 2000);
-  };
-
-  // Delete model
-  const handleDeleteModel = async (modelName: string) => {
-    if (!confirm(`Сигурни ли сте, че искате да изтриете ${modelName}?`)) return;
-    
-    try {
-      await fetch(`/api/models?model=${encodeURIComponent(modelName)}`, { method: 'DELETE' });
-      await fetchModels();
-      await fetchStorageInfo();
-    } catch (e) {}
-  };
-
-  // Delete file
-  const handleDeleteFile = async (file: FileItem) => {
-    if (!confirm(`Изтриване на ${file.name}?`)) return;
-    
-    try {
-      await fetch(`/api/storage?path=${encodeURIComponent(file.path)}&type=${file.type}`, { method: 'DELETE' });
-      fetchFiles(currentPath);
-      fetchStorageInfo();
-    } catch (e) {}
-  };
-
-  // Optimize storage with AI
-  const optimizeStorage = async () => {
-    setIsProcessing(true);
-    setCodeOutput('');
-    
-    const prompt = `Анализирай системата и предложи оптимизации:
-    
-Проект: ${formatBytes(storageInfo?.project.size || 0)}
-Ollama модели: ${formatBytes(storageInfo?.ollama.size || 0)}
-Диск свободен: ${formatBytes(storageInfo?.disk.free || 0)} от ${formatBytes(storageInfo?.disk.total || 0)}
-
-Инсталирани модели: ${installedModels.map(m => `${m.name} (${formatBytes(m.size)})`).join(', ')}
-
-Предложи конкретни стъпки за оптимизация на дисковото пространство.`;
-
-    try {
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt, model: 'phi3:mini' })
-      });
-      const data = await response.json();
-      setCodeOutput(data.content || 'Няма предложения');
+      const d = await r.json();
+      setMessages(p => [...p, { id: (Date.now() + 1).toString(), role: 'assistant', content: d.content || 'No response', timestamp: new Date().toISOString(), models: d.responses?.map((x: any) => x.model) }]);
     } catch (e: any) {
-      setCodeOutput(`Грешка: ${e.message}`);
+      setMessages(p => [...p, { id: (Date.now() + 1).toString(), role: 'assistant', content: 'Error: ' + e.message, timestamp: new Date().toISOString() }]);
     }
-    
-    setIsProcessing(false);
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white flex flex-col">
-      <header className="border-b border-gray-800/50 bg-gray-900/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                <Bot className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">CrazyIT</h1>
-                <p className="text-xs text-gray-500 font-mono">v2.0 • AI Storage & Model Manager</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/30">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs font-mono text-gray-300">ONLINE</span>
-              </div>
-              <select value={modelName} onChange={(e) => setModelName(e.target.value)} className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs">
-                {installedModels.map(m => <option key={m.name} value={m.name}>{m.name.split(':')[0]}</option>)}
-              </select>
-            </div>
+    <div className={`min-h-screen flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <header className={`border-b ${isDark ? 'border-gray-800 bg-gray-900' : 'bg-white'} px-4 py-3 sticky top-0 z-50`}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><Server className="w-6 h-6 text-white" /></div>
+            <div><h1 className="text-xl font-bold text-emerald-400">CrazyIT</h1><p className="text-xs text-gray-500">Ubuntu Server Manager v5.0</p></div>
+          </div>
+          <div className="flex items-center gap-3">
+            <select value={mode} onChange={e => setMode(e.target.value)} className={`px-3 py-2 rounded text-sm ${isDark ? 'bg-gray-800 text-white' : 'bg-white'} border`}>
+              <option value="auto">🤖 Auto</option>
+              <option value="ensemble">🔀 Ensemble</option>
+              <option value="fast">⚡ Fast</option>
+            </select>
+            <Button variant="ghost" size="icon" onClick={() => setIsDark(!isDark)}>{isDark ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5" />}</Button>
+            <Badge variant={connected ? "default" : "destructive"}>{connected ? models.length + ' models' : 'Offline'}</Badge>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-3">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-6 mb-3 bg-gray-800/30 border border-gray-700/50 p-0.5 rounded-lg h-9">
-            <TabsTrigger value="console" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><MessageSquare className="w-3 h-3 mr-1" />Чат</TabsTrigger>
-            <TabsTrigger value="code" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><Code2 className="w-3 h-3 mr-1" />Код</TabsTrigger>
-            <TabsTrigger value="models" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><Package className="w-3 h-3 mr-1" />Модели</TabsTrigger>
-            <TabsTrigger value="storage" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><HardDrive className="w-3 h-3 mr-1" />Сторидж</TabsTrigger>
-            <TabsTrigger value="debug" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><Bug className="w-3 h-3 mr-1" />Поправки</TabsTrigger>
-            <TabsTrigger value="settings" className="text-xs h-7 data-[state=active]:bg-emerald-600/20"><Settings className="w-3 h-3 mr-1" />Монитор</TabsTrigger>
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4">
+        <Tabs defaultValue="dashboard">
+          <TabsList className="grid grid-cols-8 mb-4 bg-gray-800/50 p-1 rounded-lg text-xs">
+            <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
+            <TabsTrigger value="chat">💬 Chat</TabsTrigger>
+            <TabsTrigger value="storage">💾 Storage</TabsTrigger>
+            <TabsTrigger value="services">⚙️ Services</TabsTrigger>
+            <TabsTrigger value="terminal">🖥️ Terminal</TabsTrigger>
+            <TabsTrigger value="docker">🐳 Docker</TabsTrigger>
+            <TabsTrigger value="network">🌐 Network</TabsTrigger>
+            <TabsTrigger value="logs">📋 Logs</TabsTrigger>
           </TabsList>
 
-          {/* Console Tab */}
-          <TabsContent value="console">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-              <div className="lg:col-span-1 space-y-2">
-                {/* Mini Stats */}
-                <Card className="bg-gray-800/30 border-gray-700/50">
-                  <CardContent className="p-2 grid grid-cols-2 gap-1">
-                    <div className="p-1.5 rounded bg-gray-700/20 text-center">
-                      <p className="text-base font-bold text-emerald-400">{systemInfo?.cpu.usage.toFixed(0) || 0}%</p>
-                      <p className="text-[10px] text-gray-500">CPU</p>
-                    </div>
-                    <div className="p-1.5 rounded bg-gray-700/20 text-center">
-                      <p className="text-base font-bold text-teal-400">{systemInfo?.memory.usagePercent || 0}%</p>
-                      <p className="text-[10px] text-gray-500">RAM</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gray-800/30 border-gray-700/50">
-                  <CardContent className="p-2">
-                    <div className="text-[10px] text-gray-500 mb-1">Модели: {installedModels.length}</div>
-                    <div className="text-[10px] text-gray-500">Заявки: {stats.requests}</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="lg:col-span-4">
-                <Card className="bg-gray-800/30 border-gray-700/50 flex flex-col h-[65vh]">
-                  <CardContent className="flex-1 flex flex-col p-0">
-                    <ScrollArea className="flex-1 p-3">
-                      <div className="space-y-2">
-                        {messages.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-8 text-gray-400">
-                            <Bot className="w-12 h-12 text-emerald-400 mb-2" />
-                            <p className="text-base font-semibold text-white mb-1">Здравей! Аз съм CrazyIT</p>
-                            <p className="text-center text-gray-500 text-xs">Локален AI с управление на модели и сторидж.</p>
-                          </div>
-                        ) : (
-                          messages.map(msg => (
-                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[85%] rounded-lg p-2 ${msg.role === 'user' ? 'bg-emerald-600/20' : 'bg-gray-700/50'}`}>
-                                <div className="text-xs prose prose-invert prose-sm max-w-none">
-                                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                </div>
-                                <div className="text-[10px] text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString('bg-BG')}</div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                        {isProcessing && <div className="flex items-center gap-2 text-xs text-gray-400"><Loader2 className="w-3 h-3 animate-spin" /> AI мисли...</div>}
-                        <div ref={messagesEndRef} />
-                      </div>
-                    </ScrollArea>
-                    <div className="border-t border-gray-700/50 p-2">
-                      <div className="flex gap-2">
-                        <Input ref={inputRef} value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Напиши съобщение..." className="bg-gray-700/50 border-gray-600/50 h-8 text-sm" disabled={isProcessing} />
-                        <Button onClick={sendMessage} disabled={isProcessing || !inputMessage.trim()} className="bg-emerald-600 h-8 px-3">{isProcessing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Code Tab */}
-          <TabsContent value="code">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2"><CardTitle className="text-sm">Код Инструменти</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex gap-1 flex-wrap">
-                    {['javascript', 'typescript', 'python', 'java', 'go', 'rust'].map(lang => (
-                      <Button key={lang} variant={codeLanguage === lang ? 'default' : 'outline'} size="sm" onClick={() => setCodeLanguage(lang)} className={codeLanguage === lang ? 'bg-emerald-600 h-6 text-xs' : 'h-6 text-xs'}>{lang}</Button>
-                    ))}
+          {/* Dashboard */}
+          <TabsContent value="dashboard">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><Cpu className="w-5 h-5 text-emerald-400" /><span className="font-medium">CPU</span></div>
+                    <Badge variant={sys.cpu.usage > 80 ? "destructive" : "outline"}>{sys.cpu.usage.toFixed(1)}%</Badge>
                   </div>
-                  <Input value={codeDescription} onChange={(e) => setCodeDescription(e.target.value)} placeholder="Описание за генериране" className="h-8" />
-                  <Textarea value={codeInput} onChange={(e) => setCodeInput(e.target.value)} placeholder="Код за анализ..." className="font-mono text-xs min-h-[150px]" />
-                  <div className="grid grid-cols-4 gap-1">
-                    <Button onClick={() => handleCodeAction('generate')} disabled={isProcessing} size="sm" className="bg-emerald-600 h-7 text-xs"><Sparkles className="w-3 h-3 mr-1" />Ген.</Button>
-                    <Button onClick={() => handleCodeAction('analyze')} disabled={isProcessing} size="sm" variant="outline" className="h-7 text-xs"><Lightbulb className="w-3 h-3 mr-1" />Анал.</Button>
-                    <Button onClick={() => handleCodeAction('debug')} disabled={isProcessing} size="sm" variant="outline" className="h-7 text-xs"><Bug className="w-3 h-3 mr-1" />Попр.</Button>
-                    <Button onClick={() => handleCodeAction('explain')} disabled={isProcessing} size="sm" variant="outline" className="h-7 text-xs"><FileCode className="w-3 h-3 mr-1" />Обяс.</Button>
+                  <Progress value={sys.cpu.usage} className="h-2" />
+                </CardContent>
+              </Card>
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><Database className="w-5 h-5 text-purple-400" /><span className="font-medium">RAM</span></div>
+                    <Badge variant={sys.memory.usagePercent > 80 ? "destructive" : "outline"}>{sys.memory.usagePercent.toFixed(1)}%</Badge>
+                  </div>
+                  <Progress value={sys.memory.usagePercent} className="h-2" />
+                  <p className="text-xs text-gray-500 mt-2">{formatBytes(sys.memory.used)} / {formatBytes(sys.memory.total)}</p>
+                </CardContent>
+              </Card>
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><HardDrive className="w-5 h-5 text-teal-400" /><span className="font-medium">Disk</span></div>
+                    <Badge>{(storage?.disk?.usagePercent || 0).toFixed(1)}%</Badge>
+                  </div>
+                  <Progress value={storage?.disk?.usagePercent || 0} className="h-2" />
+                  <p className="text-xs text-emerald-400 mt-2">Free: {formatBytes(storage?.disk?.free || 0)}</p>
+                </CardContent>
+              </Card>
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2"><Clock className="w-5 h-5 text-blue-400" /><span className="font-medium">Uptime</span></div>
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                  </div>
+                  <p className="text-lg font-bold">{formatUptime(sys.uptime)}</p>
+                  <p className="text-xs text-gray-500">{sys.hostname || 'Server'}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardHeader><CardTitle className="text-emerald-400 flex items-center gap-2"><Zap className="w-5 h-5" />Quick Actions</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={() => execCommand('sudo apt update')}><Download className="w-4 h-4 mr-2" />Update</Button>
+                    <Button variant="outline" onClick={() => execCommand('docker ps -a')}><Container className="w-4 h-4 mr-2" />Docker</Button>
+                    <Button variant="outline" onClick={() => execCommand('sudo ufw status')}><Shield className="w-4 h-4 mr-2" />Firewall</Button>
+                    <Button variant="outline" onClick={() => execCommand('df -h')}><HardDrive className="w-4 h-4 mr-2" />Disk</Button>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <div className="flex justify-between">
-                    <CardTitle className="text-sm">Резултат</CardTitle>
-                    {codeOutput && <Button variant="ghost" size="sm" onClick={() => navigator.clipboard.writeText(codeOutput)} className="h-6 text-xs"><Copy className="w-3 h-3" /></Button>}
-                  </div>
-                </CardHeader>
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardHeader><CardTitle className="text-emerald-400 flex items-center gap-2"><Settings className="w-5 h-5" />Services ({services.filter(s => s.status === 'active').length})</CardTitle></CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[280px]">
-                    {codeOutput ? <pre className="text-xs whitespace-pre-wrap font-mono">{codeOutput}</pre> : <div className="text-center text-gray-500 py-8"><Code2 className="w-8 h-8 mx-auto mb-2" />Избери действие</div>}
+                  <ScrollArea className="h-[150px]">
+                    <div className="space-y-1">
+                      {services.slice(0, 10).map(s => (
+                        <div key={s.name} className="flex items-center justify-between p-2 rounded bg-gray-700/50">
+                          <span className="text-sm truncate">{s.name}</span>
+                          <Badge variant={s.status === 'active' ? "default" : "destructive"} className="text-xs">{s.status}</Badge>
+                        </div>
+                      ))}
+                    </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
 
-          {/* Models Tab */}
-          <TabsContent value="models">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {/* Installed Models */}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Инсталирани Модели ({installedModels.length})</CardTitle>
-                    <Button variant="ghost" size="sm" onClick={fetchModels} className="h-6"><RefreshCw className="w-3 h-3" /></Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-2 max-h-[50vh] overflow-auto">
-                  {installedModels.map(model => (
-                    <div key={model.name} className="p-2 rounded bg-gray-700/20 flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">{model.name}</span>
-                          <Badge className="bg-green-600 text-[10px] h-4">Активен</Badge>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatBytes(model.size)} • {model.details?.parameter_size || '-'} • {model.details?.quantization_level || '-'}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setModelName(model.name)} className="h-6 text-xs">
-                          {modelName === model.name ? <Check className="w-3 h-3 text-emerald-400" /> : <Plus className="w-3 h-3" />}
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteModel(model.name)} className="h-6 text-red-400 hover:text-red-300">
-                          <Trash className="w-3 h-3" />
-                        </Button>
-                      </div>
+            <Card className={`mt-4 ${isDark ? 'bg-gray-800/50' : 'bg-white'}`}>
+              <CardHeader><CardTitle className="text-emerald-400 flex items-center gap-2"><Brain className="w-5 h-5" />AI Models ({models.length})</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  {models.map(m => (
+                    <div key={m.name} className="p-2 rounded bg-gray-700/50 text-center">
+                      <p className="text-sm font-medium truncate">{m.name.split(':')[0]}</p>
+                      <p className="text-xs text-gray-500">{formatBytes(m.size)}</p>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
-
-              {/* Available Models */}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><Download className="w-4 h-4 text-teal-400" />Достъпни за Инсталация</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 max-h-[50vh] overflow-auto">
-                  {POPULAR_MODELS.filter(m => !installedModels.some(im => im.name === m.name || im.name.startsWith(m.name.split(':')[0]))).map(model => (
-                    <div key={model.name} className="p-2 rounded bg-gray-700/20 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-sm">{model.name}</div>
-                        <div className="text-xs text-gray-500">{model.desc} • {model.size}</div>
-                      </div>
-                      <Button 
-                        size="sm" 
-                        onClick={() => handlePullModel(model.name)} 
-                        disabled={isPulling}
-                        className="h-6 bg-teal-600 hover:bg-teal-500"
-                      >
-                        {isPulling && pullModelName === model.name ? (
-                          <><Loader2 className="w-3 h-3 animate-spin mr-1" />{pullProgress.slice(0, 10)}...</>
-                        ) : <><Download className="w-3 h-3 mr-1" />Инст.</>}
-                      </Button>
-                    </div>
-                  ))}
-                  
-                  {/* Custom model input */}
-                  <div className="pt-2 border-t border-gray-700/50">
-                    <div className="flex gap-2">
-                      <Input 
-                        placeholder="друг-модел:версия" 
-                        className="h-7 text-xs"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            const target = e.target as HTMLInputElement;
-                            if (target.value.trim()) handlePullModel(target.value.trim());
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Storage Tab */}
-          <TabsContent value="storage">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              {/* Storage Overview */}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><HardDrive className="w-4 h-4 text-purple-400" />Преглед на Сторидж</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="p-2 rounded bg-gray-700/20">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-400">Диск</span>
-                      <span className="text-purple-400">{storageInfo?.disk ? Math.round((storageInfo.disk.used / storageInfo.disk.total) * 100) : 0}%</span>
-                    </div>
-                    <Progress value={storageInfo?.disk ? (storageInfo.disk.used / storageInfo.disk.total) * 100 : 0} className="h-1.5" />
-                    <div className="text-[10px] text-gray-500 mt-1">
-                      {formatBytes(storageInfo?.disk.used || 0)} / {formatBytes(storageInfo?.disk.total || 0)}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 rounded bg-gray-700/20">
-                      <div className="text-gray-500">Проект</div>
-                      <div className="text-emerald-400 font-mono">{formatBytes(storageInfo?.project.size || 0)}</div>
-                    </div>
-                    <div className="p-2 rounded bg-gray-700/20">
-                      <div className="text-gray-500">Ollama</div>
-                      <div className="text-teal-400 font-mono">{formatBytes(storageInfo?.ollama.size || 0)}</div>
-                    </div>
-                    <div className="p-2 rounded bg-gray-700/20 col-span-2">
-                      <div className="text-gray-500">Свободно</div>
-                      <div className="text-green-400 font-mono">{formatBytes(storageInfo?.disk.free || 0)}</div>
-                    </div>
-                  </div>
-
-                  <Button onClick={optimizeStorage} disabled={isProcessing} className="w-full h-8 bg-gradient-to-r from-purple-600 to-pink-600">
-                    {isProcessing ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                    AI Оптимизация
-                  </Button>
-                  {codeOutput && <pre className="text-[10px] whitespace-pre-wrap bg-gray-900/50 p-2 rounded max-h-[150px] overflow-auto">{codeOutput}</pre>}
-                </CardContent>
-              </Card>
-
-              {/* Models Storage */}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Модели Сторидж</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1 max-h-[40vh] overflow-auto">
-                  {installedModels.map(m => (
-                    <div key={m.name} className="p-2 rounded bg-gray-700/20 flex items-center justify-between text-xs">
-                      <div className="truncate flex-1">{m.name}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-teal-400 font-mono">{formatBytes(m.size)}</span>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteModel(m.name)} className="h-5 text-red-400">
-                          <Trash className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/20 text-xs">
-                    <span className="text-gray-400">Общо:</span>
-                    <span className="text-emerald-400 font-mono ml-1">{formatBytes(installedModels.reduce((a, m) => a + m.size, 0))}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* File Browser */}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardHeader className="py-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><FolderOpen className="w-4 h-4 text-yellow-400" />Файлове</CardTitle>
-                </CardHeader>
-                <CardContent className="max-h-[40vh] overflow-auto">
-                  {currentPath && (
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentPath(currentPath.split('/').slice(0, -1).join('/'))} className="h-6 text-xs mb-1">
-                      <Folder className="w-3 h-3 mr-1" />..
-                    </Button>
-                  )}
-                  <div className="space-y-0.5">
-                    {files.map(file => (
-                      <div key={file.path} className="p-1.5 rounded bg-gray-700/20 flex items-center justify-between text-xs hover:bg-gray-700/40">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {file.type === 'directory' ? <Folder className="w-3 h-3 text-yellow-400" /> : <File className="w-3 h-3 text-gray-400" />}
-                          <span className="truncate">{file.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500 font-mono">{formatBytes(file.size)}</span>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteFile(file)} className="h-5 text-red-400">
-                            <Trash className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Debug Tab */}
-          <TabsContent value="debug">
-            <Card className="bg-gray-800/30 border-gray-700/50">
-              <CardHeader className="py-2"><CardTitle className="text-sm flex items-center gap-2"><Bug className="w-4 h-4 text-emerald-400" />AI Debugger</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <Textarea value={codeInput} onChange={(e) => setCodeInput(e.target.value)} placeholder="Постави код с грешка или опиши проблема..." className="font-mono text-xs min-h-[180px]" />
-                <Button onClick={() => handleCodeAction('debug')} disabled={isProcessing || !codeInput.trim()} className="w-full h-8 bg-emerald-600">
-                  {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Bug className="w-4 h-4 mr-1" />}Намери и поправи грешките
-                </Button>
-                {codeOutput && <pre className="text-xs whitespace-pre-wrap bg-gray-900/50 p-3 rounded max-h-[250px] overflow-auto">{codeOutput}</pre>}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Settings/Monitor Tab */}
-          <TabsContent value="settings">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><Cpu className="w-4 h-4 text-emerald-400" /><span className="text-xs text-gray-400">CPU</span></div>
-                  <div className="text-xl font-bold text-emerald-400">{systemInfo?.cpu.usage.toFixed(0) || 0}%</div>
-                  <Progress value={systemInfo?.cpu.usage || 0} className="h-1 mt-1" />
-                  <div className="text-[10px] text-gray-500 mt-1">{systemInfo?.cpu.temp || 0}°C • {systemInfo?.cpu.cores || 0} ядра</div>
+          {/* Chat */}
+          <TabsContent value="chat">
+            <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+              <CardContent className="p-0">
+                <ScrollArea className="h-[50vh] p-4">
+                  {messages.length === 0 && (
+                    <div className="text-center py-16">
+                      <Brain className="w-16 h-16 mx-auto text-emerald-400 mb-4" />
+                      <p className="text-lg font-semibold">AI Server Manager</p>
+                      <p className="text-sm text-gray-500 mt-2">Управлявайте сървъра с AI</p>
+                    </div>
+                  )}
+                  {messages.map(m => (
+                    <div key={m.id} className={`mb-4 flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-xl p-4 ${m.role === 'user' ? 'bg-emerald-600' : 'bg-gray-700'}`}>
+                        {m.models && <div className="text-xs text-gray-400 mb-2">🧠 {m.models.join(' + ')}</div>}
+                        <div className="prose prose-invert text-sm"><ReactMarkdown>{m.content}</ReactMarkdown></div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={ref} />
+                </ScrollArea>
+                <div className="p-4 border-t border-gray-700 flex gap-2">
+                  <Input value={input} onChange={e => setInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && send()} placeholder="Въпрос..." disabled={loading} className="h-12" />
+                  <Button onClick={send} disabled={loading} className="bg-emerald-600 px-6 h-12">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Storage */}
+          <TabsContent value="storage">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardHeader><CardTitle className="text-emerald-400"><PieChart className="w-5 h-5 inline mr-2" />Storage</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-3 rounded-lg bg-gray-700/50">
+                    <div className="flex justify-between mb-2"><span className="text-sm">AI Models</span><Badge>{models.length}</Badge></div>
+                    <p className="text-xs text-gray-500">{formatBytes(storage?.modelsSize || 0)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-700/50">
+                    <div className="flex justify-between mb-2"><span className="text-sm">Disk</span><Badge>{(storage?.disk?.usagePercent || 0).toFixed(1)}%</Badge></div>
+                    <Progress value={storage?.disk?.usagePercent || 0} className="h-2" />
+                  </div>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><MemoryStick className="w-4 h-4 text-teal-400" /><span className="text-xs text-gray-400">RAM</span></div>
-                  <div className="text-xl font-bold text-teal-400">{systemInfo?.memory.usagePercent || 0}%</div>
-                  <Progress value={systemInfo?.memory.usagePercent || 0} className="h-1 mt-1" />
-                  <div className="text-[10px] text-gray-500 mt-1">{formatBytes(systemInfo?.memory.used || 0)} / {formatBytes(systemInfo?.memory.total || 0)}</div>
-                </CardContent>
-              </Card>
-              {systemInfo?.gpu && (
-                <Card className="bg-gray-800/30 border-gray-700/50">
-                  <CardContent className="p-2">
-                    <div className="flex items-center gap-2 mb-1"><CpuIcon className="w-4 h-4 text-cyan-400" /><span className="text-xs text-gray-400">GPU</span></div>
-                    <div className="text-xl font-bold text-cyan-400">{systemInfo.gpu.utilization}%</div>
-                    <Progress value={systemInfo.gpu.utilization} className="h-1 mt-1" />
-                    <div className="text-[10px] text-gray-500 mt-1">{systemInfo.gpu.temp}°C • {systemInfo.gpu.power.toFixed(0)}W</div>
-                  </CardContent>
-                </Card>
-              )}
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><HardDrive className="w-4 h-4 text-purple-400" /><span className="text-xs text-gray-400">Диск</span></div>
-                  <div className="text-xl font-bold text-purple-400">{systemInfo?.disk.usagePercent || 0}%</div>
-                  <Progress value={systemInfo?.disk.usagePercent || 0} className="h-1 mt-1" />
-                  <div className="text-[10px] text-gray-500 mt-1">{formatBytes(systemInfo?.disk.free || 0)} свободно</div>
-                </CardContent>
-              </Card>
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><Package className="w-4 h-4 text-emerald-400" /><span className="text-xs text-gray-400">Модели</span></div>
-                  <div className="text-xl font-bold text-emerald-400">{installedModels.length}</div>
-                  <div className="text-[10px] text-gray-500 mt-1">{formatBytes(installedModels.reduce((a, m) => a + m.size, 0))}</div>
-                </CardContent>
-              </Card>
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><MessageSquare className="w-4 h-4 text-teal-400" /><span className="text-xs text-gray-400">Съобщения</span></div>
-                  <div className="text-xl font-bold text-teal-400">{stats.messages}</div>
-                  <div className="text-[10px] text-gray-500 mt-1">{stats.requests} заявки</div>
-                </CardContent>
-              </Card>
-              <Card className="bg-gray-800/30 border-gray-700/50">
-                <CardContent className="p-2">
-                  <div className="flex items-center gap-2 mb-1"><Timer className="w-4 h-4 text-yellow-400" /><span className="text-xs text-gray-400">Uptime</span></div>
-                  <div className="text-sm font-bold text-yellow-400">{systemInfo?.uptime || '-'}</div>
+              <Card className={`lg:col-span-2 ${isDark ? 'bg-gray-800/50' : 'bg-white'}`}>
+                <CardHeader><CardTitle className="text-emerald-400"><Package className="w-5 h-5 inline mr-2" />Installed Models</CardTitle></CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-2">
+                      {models.map(m => (
+                        <div key={m.name} className="p-2 rounded bg-gray-700/50 flex justify-between items-center">
+                          <div><p className="font-medium">{m.name}</p><p className="text-xs text-gray-500">{formatBytes(m.size)}</p></div>
+                          <Button size="sm" variant="ghost" className="text-red-400" onClick={() => deleteModel(m.name)}><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             </div>
+            <Card className={`mt-4 ${isDark ? 'bg-gray-800/50' : 'bg-white'}`}>
+              <CardHeader><CardTitle className="text-teal-400"><CloudDownload className="w-5 h-5 inline mr-2" />Install Model</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input value={modelSearch} onChange={e => setModelSearch(e.target.value)} placeholder="Model name" className="flex-1" disabled={!!pullingModel} />
+                  <Button onClick={() => pullModel(modelSearch)} disabled={!!pullingModel || !modelSearch} className="bg-teal-600">{pullingModel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}</Button>
+                </div>
+                <div className="flex gap-1 flex-wrap">
+                  {['All', 'Llama', 'DeepSeek', 'Qwen', 'Mistral', 'Phi', 'Code'].map(c => (
+                    <Button key={c} variant={selectedCategory === c ? 'default' : 'outline'} size="sm" onClick={() => setSelectedCategory(c)} className={selectedCategory === c ? 'bg-emerald-600' : ''}>{c}</Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {POPULAR_MODELS.filter(m => selectedCategory === 'All' || m.category === selectedCategory).map(m => (
+                    <div key={m.name} className="p-2 rounded bg-gray-700/50">
+                      <div className="flex justify-between items-center">
+                        <div><p className="text-sm font-medium">{m.name}</p><p className="text-xs text-gray-500">{m.size}</p></div>
+                        <Button size="sm" onClick={() => pullModel(m.name)} disabled={!!pullingModel}><Download className="w-3 h-3" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Services */}
+          <TabsContent value="services">
+            <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+              <CardHeader><CardTitle className="text-emerald-400"><Settings className="w-5 h-5 inline mr-2" />System Services</CardTitle></CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px]">
+                  {services.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">Loading services...</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {services.map(s => (
+                        <div key={s.name} className="p-3 rounded bg-gray-700/50 flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{s.name}</span>
+                            <Badge variant={s.status === 'active' ? "default" : "destructive"}>{s.status}</Badge>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => manageService(s.name, 'start')}><Play className="w-3 h-3" /></Button>
+                            <Button size="sm" variant="outline" onClick={() => manageService(s.name, 'stop')}><Pause className="w-3 h-3" /></Button>
+                            <Button size="sm" variant="outline" onClick={() => manageService(s.name, 'restart')}><RotateCcw className="w-3 h-3" /></Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Terminal */}
+          <TabsContent value="terminal">
+            <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+              <CardHeader><CardTitle className="text-emerald-400"><Terminal className="w-5 h-5 inline mr-2" />Terminal</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input value={cmdInput} onChange={e => setCmdInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && execCommand(cmdInput)} placeholder="Command..." className="font-mono h-10" />
+                  <Button onClick={() => execCommand(cmdInput)} disabled={cmdLoading} className="bg-emerald-600">{cmdLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}</Button>
+                </div>
+                <div className={`p-4 rounded-lg font-mono text-sm bg-gray-900 min-h-[300px] whitespace-pre-wrap overflow-auto`}>{cmdResult || <span className="text-gray-500">Result...</span>}</div>
+                <div className="flex gap-2 flex-wrap">
+                  {['ls -la', 'df -h', 'free -h', 'docker ps', 'systemctl status', 'journalctl -xe'].map(c => (
+                    <Button key={c} variant="outline" size="sm" onClick={() => setCmdInput(c)}>{c}</Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Docker */}
+          <TabsContent value="docker">
+            <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+              <CardHeader><CardTitle className="text-emerald-400"><Container className="w-5 h-5 inline mr-2" />Docker Containers</CardTitle></CardHeader>
+              <CardContent>
+                {containers.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Container className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No containers found</p>
+                    <Button variant="outline" size="sm" className="mt-2" onClick={() => execCommand('docker ps -a')}>Check Docker</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {containers.map(c => (
+                      <div key={c.id} className="p-3 rounded bg-gray-700/50 flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2"><span className="font-medium">{c.name}</span><Badge variant={c.status.includes('Up') ? "default" : "destructive"}>{c.status}</Badge></div>
+                          <p className="text-xs text-gray-500">{c.image}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Network */}
+          <TabsContent value="network">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardHeader><CardTitle className="text-emerald-400"><Wifi className="w-5 h-5 inline mr-2" />Network Interfaces</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {network.length === 0 ? (
+                      <div className="text-center py-4 text-gray-500">Loading network...</div>
+                    ) : (
+                      network.map(iface => (
+                        <div key={iface.name} className="p-3 rounded bg-gray-700/50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{iface.name}</span>
+                              <Badge variant={iface.up ? "default" : "destructive"}>{iface.up ? 'UP' : 'DOWN'}</Badge>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">IP: {iface.ip || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">MAC: {iface.mac || 'N/A'}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+                <CardHeader><CardTitle className="text-emerald-400"><Shield className="w-5 h-5 inline mr-2" />Firewall</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={() => execCommand('sudo ufw status verbose')}>Check Status</Button>
+                    <Button variant="outline" onClick={() => execCommand('sudo ufw enable')}>Enable</Button>
+                    <Button variant="outline" onClick={() => execCommand('sudo ufw disable')}>Disable</Button>
+                    <Button variant="outline" onClick={() => execCommand('sudo ufw reload')}>Reload</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <Card className={`mt-4 ${isDark ? 'bg-gray-800/50' : 'bg-white'}`}>
+              <CardHeader><CardTitle className="text-emerald-400"><Globe className="w-5 h-5 inline mr-2" />Quick Network Actions</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <Button variant="outline" onClick={() => execCommand('ping -c 4 google.com')}>Ping Google</Button>
+                  <Button variant="outline" onClick={() => execCommand('curl ifconfig.me')}>My IP</Button>
+                  <Button variant="outline" onClick={() => execCommand('netstat -tuln')}>Open Ports</Button>
+                  <Button variant="outline" onClick={() => execCommand('ip route')}>Routes</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Logs */}
+          <TabsContent value="logs">
+            <Card className={isDark ? 'bg-gray-800/50' : 'bg-white'}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-emerald-400"><FileText className="w-5 h-5 inline mr-2" />System Logs</CardTitle>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => fetchLogs('syslog')}>Syslog</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchLogs('auth')}>Auth</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchLogs('kern')}>Kernel</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchLogs('docker')}>Docker</Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px]">
+                  {logs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Select a log source above</p>
+                    </div>
+                  ) : (
+                    <div className="font-mono text-xs space-y-1">
+                      {logs.map((log, i) => (
+                        <div key={i} className={`p-2 rounded ${log.level === 'error' ? 'bg-red-500/10' : 'bg-gray-700/30'}`}>
+                          <span className="text-gray-500">{log.timestamp}</span>
+                          <span className="ml-2">{log.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
 
-      <footer className="border-t border-gray-800/50 bg-gray-900/80 py-2">
-        <div className="container mx-auto px-4 flex items-center justify-between text-[10px] text-gray-500">
-          <div className="flex items-center gap-3">
-            <span>🔧 {installedModels.length} модела</span>
-            <span>💾 {formatBytes(storageInfo?.disk.free || 0)} свободно</span>
-          </div>
-          <span>CrazyIT v2.0 • Storage & Model Manager</span>
+      <footer className={`border-t ${isDark ? 'border-gray-800 bg-gray-900' : 'bg-white'} px-4 py-3 mt-auto`}>
+        <div className="max-w-7xl mx-auto flex justify-between text-xs text-gray-500">
+          <span>CrazyIT v5.0 - Ubuntu Server Manager</span>
+          <span>CPU: {sys.cpu.usage.toFixed(0)}% | RAM: {sys.memory.usagePercent.toFixed(0)}%</span>
         </div>
       </footer>
     </div>
