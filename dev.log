@@ -1,0 +1,21 @@
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:5000
+- Network:       http://0.0.0.0:5000
+- Environments: .env
+
+✓ Starting...
+✓ Ready in 1018ms
+⚠ Cross origin request detected from 88.87.29.97 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET / 200 in 2.5s (compile: 2.2s, render: 311ms)
+ GET /api/system 200 in 1718ms (compile: 294ms, render: 1425ms)
+ GET /api/models?action=list 200 in 90ms (compile: 36ms, render: 54ms)
+ GET /api/system 200 in 2.0s (compile: 4ms, render: 2.0s)
+ GET /api/system 200 in 2.4s (compile: 4ms, render: 2.4s)
+ GET /api/storage?action=info 200 in 8.3s (compile: 74ms, render: 8.2s)
+ GET /api/system 200 in 2.3s (compile: 4ms, render: 2.3s)
+ GET /api/system 200 in 1716ms (compile: 4ms, render: 1712ms)
+ GET /api/system 200 in 2.4s (compile: 9ms, render: 2.4s)
+ GET /api/system 200 in 1886ms (compile: 4ms, render: 1882ms)
+ GET /api/system 200 in 2.4s (compile: 9ms, render: 2.4s)
+ GET /api/system 200 in 2.4s (compile: 12ms, render: 2.4s)
