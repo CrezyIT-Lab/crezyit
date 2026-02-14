@@ -1,0 +1,129 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AIModel {
+  id          String   @id @default(cuid())
+  name        String
+  type        String
+  endpoint    String
+  modelId     String
+  isActive    Boolean  @default(true)
+  temperature Float    @default(0.7)
+  maxTokens   Int      @default(4096)
+  priority    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  conversations Conversation[]
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String?
+  modelId   String?
+  model     AIModel? @relation(fields: [modelId], references: [id])
+  isPinned  Boolean  @default(false)
+  isArchived Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  tokens         Int?
+  modelUsed      String?
+  processingTime Int?
+  createdAt      DateTime     @default(now())
+}
+
+model AgentTask {
+  id          String   @id @default(cuid())
+  type        String
+  title       String
+  description String?
+  command     String?
+  status      String   @default("pending")
+  result      String?
+  approved    Boolean  @default(false)
+  autoApprove Boolean  @default(false)
+  priority    String   @default("medium")
+  retries     Int      @default(0)
+  maxRetries  Int      @default(3)
+  sessionId   String?
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+}
+
+model CommandHistory {
+  id        String   @id @default(cuid())
+  command   String
+  args      String?
+  result    String?
+  exitCode  Int?
+  success   Boolean  @default(false)
+  approved  Boolean  @default(false)
+  duration  Int?
+  sessionId String?
+  createdAt DateTime @default(now())
+}
+
+model AILearning {
+  id              String   @id @default(cuid())
+  queryType       String
+  queryPattern    String?
+  selectedModel   String
+  userRating      Int?
+  userFeedback    String?
+  responseQuality Float?
+  wasCorrect      Boolean?
+  responseTime    Int?
+  modelScores     String?
+  createdAt       DateTime @default(now())
+}
+
+model ModelWeight {
+  id           String   @id @default(cuid())
+  modelId      String
+  taskType     String
+  weight       Float    @default(1.0)
+  userModified Boolean  @default(false)
+  successRate  Float    @default(0.5)
+  useCount     Int      @default(0)
+  avgRating    Float    @default(0.0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([modelId, taskType])
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model UserSettings {
+  id               String   @id @default(cuid())
+  theme            String   @default("dark")
+  defaultModel     String?
+  systemPrompt     String?
+  language         String   @default("bg")
+  fontSize         Int      @default(14)
+  sendOnEnter      Boolean  @default(true)
+  streamingEnabled Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
